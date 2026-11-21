@@ -39,7 +39,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Build xterm source variant
-        run: ./scripts/build-debian12.sh "${{ matrix.variant }}"
+        run: bash ./scripts/build-debian12.sh "${{ matrix.variant }}"
       - uses: actions/upload-artifact@v4
         with:
           name: "${{ matrix.label }}-core2-no-xinerama-no-toolbar"
