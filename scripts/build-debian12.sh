@@ -88,7 +88,10 @@ cd "$WORK/track-a"
 apt-get source xterm
 A_SOURCE="$(find "$WORK/track-a" -mindepth 1 -maxdepth 1 -type d -name 'xterm-*' -print -quit)"
 [[ -n "$A_SOURCE" && -f "$A_SOURCE/debian/rules" && -f "$A_SOURCE/configure" ]] || fail 'Track A source tree incomplete'
-printf 'Track A source: %s\n' "$(cd "$A_SOURCE" && dpkg-parsechangelog -S Version)"
+A_SOURCE_VERSION="$(cd "$A_SOURCE" && dpkg-parsechangelog -S Version)"
+printf 'Track A source: %s\n' "$A_SOURCE_VERSION"
+grep -n 'define OPT_SCROLL_LOCK' "$A_SOURCE/ptyx.h" | tee "$LOGS/track-a-scroll-lock.txt"
+grep -Eq '^#define OPT_SCROLL_LOCK[[:space:]]+1' "$A_SOURCE/ptyx.h" || fail 'Track A source does not enable OPT_SCROLL_LOCK by default'
 cat "$A_SOURCE/debian/rules" | tee "$LOGS/track-a-rules.before"
 cp -a "$A_SOURCE/debian" "$WORK/debian-template"
 
@@ -108,7 +111,7 @@ export DEBFULLNAME="xterm package build"
 export DEBEMAIL="builder@localhost"
 (
     cd "$A_SOURCE"
-    dch --local +custom1 --distribution bookworm --force-distribution \
+    dch --newversion "$A_SOURCE_VERSION+custom1" --distribution bookworm --force-distribution \
         'Trim optional terminal features; keep scroll-lock support.'
     DEB_CFLAGS_MAINT_APPEND="-O2 -march=core2 -mtune=core2" \
         dpkg-buildpackage -us -uc -b -j"$JOBS"
@@ -145,6 +148,7 @@ if [[ -s debian/patches/series ]]; then
         cat "$LOGS/track-b-quilt.log"
         FAILED_PATCH="$(sed -n 's/^Applying patch //p' "$LOGS/track-b-quilt.log" | tail -n 1)"
         [[ -n "$FAILED_PATCH" ]] || fail 'quilt failed without identifying the incompatible patch'
+        FAILED_PATCH="$(basename "$FAILED_PATCH")"
         quilt pop -a >/dev/null 2>&1 || true
         grep -Fvx "$FAILED_PATCH" debian/patches/series >debian/patches/series.new || true
         cmp -s debian/patches/series debian/patches/series.new && fail "Could not drop $FAILED_PATCH"
@@ -178,6 +182,9 @@ text = text.replace("/etc/X11/app-defaults", "/opt/xterm-latest/lib/X11/app-defa
 text = text.replace("/usr/share/icons", "/opt/xterm-latest/share/icons")
 text = text.replace("/usr/share/pixmaps", "/opt/xterm-latest/share/pixmaps")
 text = text.replace("/usr/share/applications", "/opt/xterm-latest/share/applications")
+text = text.replace("$(DEBTREEDIR)/usr/bin", "$(DEBTREEDIR)/opt/xterm-latest/bin")
+text = text.replace("$(DEBTREEDIR)/usr/share/man", "$(DEBTREEDIR)/opt/xterm-latest/share/man")
+text = text.replace("$(DEBTREEDIR)/usr/share/doc/xterm", "$(DEBTREEDIR)/opt/xterm-latest/share/doc")
 rules.write_text(text)
 
 for p in d.glob("xterm-latest.*"):
@@ -194,6 +201,7 @@ for p in d.glob("xterm-latest.*"):
             ("etc/X11/app-defaults/", "opt/xterm-latest/lib/X11/app-defaults/"),
             ("usr/bin/", "opt/xterm-latest/bin/"),
             ("usr/share/man/", "opt/xterm-latest/share/man/"),
+            ("usr/share/doc/xterm/", "opt/xterm-latest/share/doc/"),
             ("usr/share/icons/", "opt/xterm-latest/share/icons/"),
             ("usr/share/pixmaps/", "opt/xterm-latest/share/pixmaps/"),
             ("usr/share/applications/", "opt/xterm-latest/share/applications/"),
@@ -205,7 +213,7 @@ for p in d.glob("xterm-latest.*"):
         output.append(lead + stripped)
     p.write_text("\n".join(output) + "\n")
 
-for name in ("xterm-latest.links", "xterm-latest.menu"):
+for name in ("xterm-latest.links", "xterm-latest.menu", "xterm-latest.manpages"):
     p = d / name
     if p.exists():
         p.unlink()
@@ -218,6 +226,9 @@ for name in ("xterm-latest.links", "xterm-latest.menu"):
     "Sat, 21 Nov 2026 00:00:00 +0000\n"
 )
 PY
+
+grep -n 'define OPT_SCROLL_LOCK' "$B_SOURCE/ptyx.h" | tee "$LOGS/track-b-scroll-lock.txt"
+grep -Eq '^#define OPT_SCROLL_LOCK[[:space:]]+1' "$B_SOURCE/ptyx.h" || fail 'Track B source does not enable OPT_SCROLL_LOCK by default'
 
 check_configure_flags "$B_SOURCE" "$LOGS/track-b-configure-help.txt" \
     --without-xinerama --disable-tek4014 --disable-vt52 \
