@@ -36,7 +36,7 @@ Or build one variant:
 ./scripts/build-debian12.sh 412
 ```
 
-The script enables Bookworm and sid source indexes, retrieves the exact Debian source package, adds the matching viewport patch as a quilt patch, and builds with `dpkg-buildpackage`. Packages and build metadata are placed under `build/out/379/` and `build/out/412/`.
+The script enables Bookworm and sid **source-only** indexes; it does not enable sid binary repositories. It retrieves the exact Debian source package, adds the matching viewport patch as a quilt patch, and builds with `dpkg-buildpackage` using dependencies available from the Debian 12 binary repositories already configured on the host. Packages and build metadata are placed under `build/out/379/` and `build/out/412/`.
 
 ## Viewport behavior
 
