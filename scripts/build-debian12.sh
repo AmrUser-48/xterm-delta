@@ -44,7 +44,13 @@ build_variant() {
     mkdir -p "$source_root" "$output_dir"
     cd "$source_root"
 
-    apt-get build-dep -y --no-install-recommends "xterm=$package_version"
+    # Use Bookworm's xterm build-dependencies for both variants.  The 412
+    # source version is in sid, but its binary build environment stays Bookworm.
+    apt-get build-dep -y --no-install-recommends xterm=379-1
+    if [[ "$variant" == "412" ]]; then
+        apt-get install -y --no-install-recommends \
+            libxkbfile-dev libxcursor-dev libxinerama-dev
+    fi
     apt-get source "xterm=$package_version"
 
     source_dir="$(find "$source_root" -mindepth 1 -maxdepth 1 -type d -name 'xterm-*' -print -quit)"
