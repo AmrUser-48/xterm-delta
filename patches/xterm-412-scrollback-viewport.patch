@@ -1,12 +1,10 @@
 --- a/util.c
 +++ b/util.c
-@@ -127,8 +127,35 @@
+@@ -127,8 +127,33 @@
  #endif
  
  #define NoPixel 0xfffffffff
  
-+static void adjustHiliteOnFwdScroll(XtermWidget xw, int amount, Bool all_lines);
-+
 +/*
 + * Keep a scrolled-back viewport anchored while full-screen output is
 + * transferred into the saved-lines buffer. Return rows evicted above it.
@@ -36,7 +34,7 @@
  				      int rect_x,
  				      int rect_y,
  				      int rect_width,
-@@ -244,8 +271,17 @@
+@@ -244,8 +269,17 @@
      int scrollheight;
      int left = ScrnLeftMargin(xw);
      int right = ScrnRightMargin(xw);
@@ -54,7 +52,7 @@
      if (screen->cursor_state)
  	HideCursor(xw);
  
-@@ -286,8 +322,10 @@
+@@ -286,8 +320,10 @@
  		    refreshheight = screen->scroll_amt;
  		}
  	    }
@@ -65,7 +63,7 @@
  	    scrolltop = screen->top_marg + shift;
  	    i = bot - (screen->bot_marg - screen->refresh_amt + screen->scroll_amt);
  	    if (i > 0) {
-@@ -321,16 +359,23 @@
+@@ -321,16 +357,23 @@
  	    refreshheight -= i;
  	}
      }
@@ -97,7 +95,7 @@
      screen->refresh_amt = 0;
  
      if (refreshheight > 0) {
-@@ -949,8 +994,13 @@
+@@ -949,8 +992,13 @@
      Boolean scroll_all_lines = (Boolean) (screen->scrollWidget
  					  && !screen->whichBuf
  					  && screen->top_marg == 0);
@@ -111,7 +109,7 @@
      TRACE(("xtermScroll count=%d (top %d, saved %d)\n", amount,
  	   screen->topline, screen->savelines));
  
-@@ -965,9 +1015,12 @@
+@@ -965,9 +1013,12 @@
  	amount = limit;
      if (amount <= 0)
  	return;
@@ -125,7 +123,7 @@
  
      if (!scroll_full_line) {
  	scrollInMargins(xw, amount, screen->top_marg);
-@@ -992,8 +1045,19 @@
+@@ -992,8 +1043,19 @@
  		    left,
  		    screen->bot_marg + 1 - screen->top_marg,
  		    right + 1 - left,
