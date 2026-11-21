@@ -213,7 +213,7 @@ for p in d.glob("xterm-latest.*"):
         output.append(lead + stripped)
     p.write_text("\n".join(output) + "\n")
 
-for name in ("xterm-latest.links", "xterm-latest.menu", "xterm-latest.manpages"):
+for name in ("xterm-latest.links", "xterm-latest.menu", "xterm-latest.manpages", "xterm-latest.alternatives"):
     p = d / name
     if p.exists():
         p.unlink()
