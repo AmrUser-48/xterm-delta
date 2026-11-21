@@ -22,7 +22,7 @@ esac
 # repositories; this file adds source indexes for both exact source versions.
 cat >/etc/apt/sources.list.d/xterm-delta-src.sources <<'EOF'
 Types: deb-src
-URIs: https://deb.debian.org/debian
+URIs: http://deb.debian.org/debian
 Suites: bookworm bookworm-updates sid
 Components: main
 Signed-By: /usr/share/keyrings/debian-archive-keyring.gpg

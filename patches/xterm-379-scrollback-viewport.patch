@@ -1,6 +1,6 @@
 --- a/util.c
 +++ b/util.c
-@@ -86,8 +86,33 @@
+@@ -86,8 +86,35 @@
  		    screen->savedlines = screen->savelines; \
  		ScrollBarDrawThumb(xw, 1); \
  	    }
@@ -36,7 +36,7 @@
  				      int rect_x,
  				      int rect_y,
  				      int rect_width,
-@@ -193,8 +218,17 @@
+@@ -193,8 +220,17 @@
      int scrollheight;
      int left = ScrnLeftMargin(xw);
      int right = ScrnRightMargin(xw);
@@ -54,7 +54,7 @@
      if (screen->cursor_state)
  	HideCursor(xw);
  
-@@ -235,8 +269,10 @@
+@@ -235,8 +271,10 @@
  		    refreshheight = screen->scroll_amt;
  		}
  	    }
@@ -65,7 +65,7 @@
  	    scrolltop = screen->top_marg + shift;
  	    i = bot - (screen->bot_marg - screen->refresh_amt + screen->scroll_amt);
  	    if (i > 0) {
-@@ -270,15 +306,22 @@
+@@ -270,15 +308,22 @@
  	    refreshheight -= i;
  	}
      }
@@ -95,7 +95,7 @@
      screen->refresh_amt = 0;
  
      if (refreshheight > 0) {
-@@ -608,8 +651,13 @@
+@@ -608,8 +653,13 @@
      Boolean scroll_all_lines = (Boolean) (screen->scrollWidget
  					  && !screen->whichBuf
  					  && screen->top_marg == 0);
@@ -109,7 +109,7 @@
      TRACE(("xtermScroll count=%d (top %d, saved %d)\n", amount,
  	   screen->topline, screen->savelines));
  
-@@ -622,10 +670,24 @@
+@@ -622,10 +672,24 @@
      i = screen->bot_marg - screen->top_marg + 1;
      if (amount > i)
  	amount = i;
