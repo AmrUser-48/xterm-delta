@@ -17,7 +17,7 @@ By contrast:
 - Core Functions to Inspect & Modify:
   - screen.c: ScrnDeleteLine() / ScrnInsertLine() / ScrnClearLines() / Scroll() — wherever lines are shifted off the top of the full scrolling region (top_marg == 0) into the saved-lines buffer and screen->savedlines is incremented.
   - util.c / screen.c: WindowScroll(XtermWidget xw, int top, Bool always) — moves the viewport to `top` (clamped between -screen->savedlines and 0), triggers ScrnRefresh(), and updates the scrollbar.
-  - scrollbar.c: ScrollBarDrawThumb(Widget scrollWidget) — recalculates thumb size and top position from screen->topline, screen->savedlines, and screen->max_row.
+  - scrollbar.c: ScrollBarDrawThumb(XtermWidget xw, int mode) — recalculates thumb size and top position from screen->topline, screen->savedlines, and screen->max_row.
   - charproc.c / input.c: Call sites checking `if (screen->scrollttyoutput && screen->topline != 0) WindowScroll(xw, 0, False);`.
 
 3. REQUIRED BEHAVIOR & IMPLEMENTATION LOGIC
@@ -74,3 +74,15 @@ B. Edge Cases to Verify in Codebase:
 ### 3. Why This Matters When Patching `xterm`
 - Both Alacritty (`display_offset += positions` when `display_offset != 0`) and VTE (keeping `scroll_delta` anchored while `insert_delta` advances) preserve the *relative distance* from the live bottom when new lines enter scrollback.
 - In `xterm`, `screen->topline` is a negative offset relative to the live bottom (`0` at bottom, `-N` scrolled back) that is **not** decremented when `amount` lines are pushed into `screen->savedlines` while `screen->topline < 0 && !screen->scrollttyoutput`. Subtracting `amount` from `screen->topline` (clamped to `-screen->savedlines`) and updating the scrollbar thumb replicates Alacritty/VTE's steady-viewport behavior.
+
+
+5. IMPLEMENTED SOURCE PATCH DESIGN
+
+The repository carries independent source patches for xterm 379 and xterm 412. Both patch util.c and use the actual xterm API:
+  ScrollBarDrawThumb(XtermWidget xw, int mode)
+
+Pinning is enabled only when the normal screen buffer is active, a scrollbar and non-zero saved-lines capacity are configured, complete lines scroll from a region beginning at row 0, scrollTtyOutput is disabled, and the user is already scrolled back.
+
+PinScrollbackViewport() advances screen->topline by the actual scroll amount and clamps it to -screen->savedlines. It leaves the visible window and selection coordinates unchanged while the viewed rows remain in the FIFO. If the FIFO evicts rows above the viewport, only the evicted-row count is applied to selection coordinates and the viewport is repainted.
+
+Both xtermScroll() and FlushScroll() handle pinned output, including pending jump-scroll batches. The pinned path avoids the physical scroll copy; the ordinary live-bottom path, alternate screen, and scroll operations that do not save complete lines keep their original behavior.
