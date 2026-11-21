@@ -1,0 +1,43 @@
+name: Build xterm Debian packages
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "BUILD.rst"
+      - "scripts/build-debian12.sh"
+      - ".github/workflows/build.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    container:
+      image: debian:12
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Build both packages in clean Debian 12
+        run: bash scripts/build-debian12.sh
+
+      - name: Upload Debian packages
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: xterm-deb-packages
+          path: build/out/*.deb
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Upload build logs and diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: xterm-build-diagnostics
+          path: build/logs/
+          if-no-files-found: warn
+          retention-days: 7
