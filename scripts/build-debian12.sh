@@ -198,16 +198,16 @@ for p in d.glob("xterm-latest.*"):
             output.append(line)
             continue
         for old, new in (
-            ("etc/X11/app-defaults/", "opt/xterm-latest/lib/X11/app-defaults/"),
-            ("usr/bin/", "opt/xterm-latest/bin/"),
-            ("usr/share/man/", "opt/xterm-latest/share/man/"),
-            ("usr/share/doc/xterm/", "opt/xterm-latest/share/doc/"),
-            ("usr/share/icons/", "opt/xterm-latest/share/icons/"),
-            ("usr/share/pixmaps/", "opt/xterm-latest/share/pixmaps/"),
-            ("usr/share/applications/", "opt/xterm-latest/share/applications/"),
-            ("usr/share/terminfo/", "opt/xterm-latest/share/terminfo/"),
+            ("etc/X11/app-defaults", "opt/xterm-latest/lib/X11/app-defaults"),
+            ("usr/bin", "opt/xterm-latest/bin"),
+            ("usr/share/man", "opt/xterm-latest/share/man"),
+            ("usr/share/doc", "opt/xterm-latest/share/doc"),
+            ("usr/share/icons", "opt/xterm-latest/share/icons"),
+            ("usr/share/pixmaps", "opt/xterm-latest/share/pixmaps"),
+            ("usr/share/applications", "opt/xterm-latest/share/applications"),
+            ("usr/share/terminfo", "opt/xterm-latest/share/terminfo"),
         ):
-            if stripped.startswith(old):
+            if stripped == old or stripped.startswith(old + "/"):
                 stripped = new + stripped[len(old):]
                 break
         output.append(lead + stripped)
