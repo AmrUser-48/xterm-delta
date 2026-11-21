@@ -29,7 +29,7 @@ EOF
 export DEBIAN_FRONTEND=noninteractive
 apt-get update
 apt-get install -y --no-install-recommends \
-    build-essential ca-certificates devscripts dpkg-dev fakeroot
+    build-essential ca-certificates devscripts dpkg-dev fakeroot python3
 
 build_variant() {
     local variant="$1"
@@ -39,6 +39,7 @@ build_variant() {
     local source_dir
     local output_dir="$BUILD_DIR/out/$variant"
 
+    rm -rf "$source_root"
     mkdir -p "$source_root" "$output_dir"
     cd "$source_root"
 
