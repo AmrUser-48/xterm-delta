@@ -4,7 +4,6 @@ on:
   push:
     paths:
       - ".github/workflows/build.yml"
-      - "patches/**"
       - "scripts/**"
       - "README.md"
       - "info.txt"
@@ -12,7 +11,6 @@ on:
   pull_request:
     paths:
       - ".github/workflows/build.yml"
-      - "patches/**"
       - "scripts/**"
       - "README.md"
       - "info.txt"
@@ -31,9 +29,9 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - patch: "379"
+          - variant: "379"
             label: "bookworm-xterm-379"
-          - patch: "412"
+          - variant: "412"
             label: "stable-xterm-412"
     defaults:
       run:
@@ -41,9 +39,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Build xterm source variant
-        run: ./scripts/build-debian12.sh "${{ matrix.patch }}"
+        run: ./scripts/build-debian12.sh "${{ matrix.variant }}"
       - uses: actions/upload-artifact@v4
         with:
-          name: "${{ matrix.label }}-core2-debian12"
-          path: "build/out/${{ matrix.patch }}/*.deb"
+          name: "${{ matrix.label }}-core2-no-xinerama-no-toolbar"
+          path: "build/out/${{ matrix.variant }}/*.deb"
           if-no-files-found: error
