@@ -1,0 +1,76 @@
+
+TECHNICAL SPECIFICATION: PINNING XTERM SCROLLBACK VIEWPORT DURING LIVE TTY OUTPUT
+
+1. OVERVIEW & REFERENCE MODELS
+In xterm, setting XTerm*scrollTtyOutput: false (command-line flag -si) prevents incoming TTY output from snapping the viewport back to row 0 (the live bottom), but the visible text still drifts upward as new lines are pushed into the scrollback ring buffer.
+By contrast:
+- Alacritty (alacritty_terminal/src/grid/mod.rs, Grid::scroll_up): tracks display_offset (0 = live bottom, N = lines scrolled up). When display_offset != 0 and N lines scroll into history, it increments display_offset = min(display_offset + N, history_size()).
+- VTE / Tilda (src/vte.cc): tracks insert_delta (active screen top in ring buffer) and scroll_delta (viewport top in ring buffer). When scrolled up (scroll_delta < insert_delta) and scroll-on-output is disabled, scroll_delta stays fixed as insert_delta advances, clamped only when the ring buffer overwrites the oldest valid row.
+
+2. XTERM INTERNAL ARCHITECTURE (VERIFIED SYMBOLS)
+- TScreen struct (ptyx.h):
+  - screen->topline: int representing the top visible row relative to the active screen. 0 = live bottom; negative values (-1 .. -screen->savedlines) = scrolled back into history.
+  - screen->savedlines: int count of lines currently stored in the scrollback FIFO/ring buffer (bounded by screen->savelines / saveLines resource).
+  - screen->scrollttyoutput: Boolean corresponding to the scrollTtyOutput (-si / +si) resource (True = snap to bottom on output, False = do not snap).
+  - screen->scrollkey: Boolean corresponding to scrollKey (-sk / +sk).
+  - screen->scrollWidget: Athena/Xt scrollbar Widget.
+- Core Functions to Inspect & Modify:
+  - screen.c: ScrnDeleteLine() / ScrnInsertLine() / ScrnClearLines() / Scroll() — wherever lines are shifted off the top of the full scrolling region (top_marg == 0) into the saved-lines buffer and screen->savedlines is incremented.
+  - util.c / screen.c: WindowScroll(XtermWidget xw, int top, Bool always) — moves the viewport to `top` (clamped between -screen->savedlines and 0), triggers ScrnRefresh(), and updates the scrollbar.
+  - scrollbar.c: ScrollBarDrawThumb(Widget scrollWidget) — recalculates thumb size and top position from screen->topline, screen->savedlines, and screen->max_row.
+  - charproc.c / input.c: Call sites checking `if (screen->scrollttyoutput && screen->topline != 0) WindowScroll(xw, 0, False);`.
+
+3. REQUIRED BEHAVIOR & IMPLEMENTATION LOGIC
+A. When Lines Scroll Into Scrollback History (Full-Screen Scroll Up):
+   - Condition:
+     1. The scroll operation saves lines into scrollback history (primary screen buffer, not alternate screen, and scrolling region starts at row 0).
+     2. User is currently scrolled back: `screen->topline < 0`.
+     3. Autoscroll-on-output is disabled: `!screen->scrollttyoutput`.
+   - Action:
+     - When `amount` lines are pushed into the scrollback buffer (and `screen->savedlines` is updated):
+       `int new_top = screen->topline - amount;`
+       `if (new_top < -screen->savedlines) new_top = -screen->savedlines;`
+       `screen->topline = new_top;`
+     - Suppress or adjust the physical XCopyArea / screen-shift blit on the visible window when `screen->topline < 0 && !screen->scrollttyoutput` so the visible rows are NOT shifted upward on screen, and only redraw if `new_top` hit the `-screen->savedlines` clamp (ring buffer wrap/eviction).
+     - Call `ScrollBarDrawThumb(screen->scrollWidget)` so the scrollbar thumb shrinks/moves upward proportionally as `screen->savedlines` grows, matching the stationary text.
+
+B. Edge Cases to Verify in Codebase:
+   1. Jump Scroll (`jumpScroll: true`): xterm batches multiple newlines into a multi-line scroll (`amount > 1`). Ensure `amount` (not hardcoded `1`) is subtracted from `screen->topline` and accounted for in `savedlines` clamping.
+   2. Ring-Buffer Full (`screen->savedlines == screen->savelines`): Once `savedlines` reaches `savelines`, each new line evicts the oldest saved line. Clamping `screen->topline >= -screen->savedlines` automatically allows the oldest lines to scroll off once the buffer limit is reached, matching Alacritty and VTE.
+   3. Alternate Screen Buffer (`screen->whichBuf != 0`, e.g., vim/less/htop): Do NOT apply scrollback pinning when on the alternate buffer or when `savelines == 0`.
+   4. Sub-Region Scrolling (`top_marg > 0` or `bot_marg < max_row`, e.g., status bars / split panes): Only adjust `topline` when lines actually enter the scrollback buffer (`top_marg == 0`), not when an inner DECSTBM scroll region scrolls without saving lines.
+   5. Active Selection (`screen->startH` / `screen->endH`): Check how `TrackText` / `ScrnUpdate` shifts selection row coordinates when lines scroll into history so highlighted text coordinates stay aligned with the pinned rows.
+   6. `scrollKey: true` & Manual Scrolling: Ensure pressing a key (when `scrollKey` is enabled) or dragging/wheeling the scrollbar still calls `WindowScroll()` cleanly to return to `topline = 0` or move through history.
+
+4. VERIFICATION STEPS FOR THE AGENT
+1. Fetch source (`apt source xterm` on Debian 12 for xterm-379, or latest upstream tarball from invisible-island.net).
+2. Grep for `topline`, `savedlines`, `scrollttyoutput`, and `ScrollBarDrawThumb` across `screen.c`, `util.c`, `charproc.c`, and `scrollbar.c`.
+3. Trace the exact call chain from `Index()` / `do_nel()` / `flushscroll()` -> `Scroll()` / `ScrnDeleteLine()` -> `WindowScroll()` / `ScrnRefresh()`.
+4. Build and test with `xterm -si -sl 5000 -e bash -c 'i=0; while true; do echo "line $i"; i=$((i+1)); sleep 0.02; done'`:
+   - Scroll up with mouse wheel or Shift+PageUp while the loop runs.
+   - Confirm visible line numbers remain completely frozen on screen while the scrollbar thumb updates smoothly.
+   - Confirm that once >5000 lines pass while scrolled near the top, older evicted lines smoothly advance without crashing or corrupting display coordinates.
+
+
+## Reference Implementations: Holding Scroll Position Under Live Output
+
+### 1. Alacritty (`alacritty_terminal/src/grid/mod.rs`)
+- **State field:** `Grid::display_offset: usize` represents how many lines the viewport is scrolled *up* from the live bottom (`0` = pinned to bottom / live output; `N` = `N` lines above the live bottom).
+- **Key methods:**
+  - `Grid::scroll_up(&mut self, region: &Range<usize>, positions: usize)` — shifts lines within `region` up into scrollback history by `positions` rows.
+  - `Grid::scroll(&mut self, region: &Range<usize>, scroll: Scroll)` — handles `Scroll::Delta(count)` and viewport offset updates.
+- **Pinning mechanism:** When lines scroll up into history (`positions` lines added) while the user is scrolled back (`display_offset != 0`), Alacritty increments `display_offset` by `positions`, clamped to `history_size()` (total scrollback capacity). Because `display_offset` measures distance *from the live bottom*, increasing `display_offset` by the same number of rows that were appended at the bottom keeps the exact same visible rows rendered on screen until the ring buffer overwrites/evicts them.
+
+
+
+### 2. Tilda via GNOME VTE (`src/vte.cc`, `src/vteseq.cc`)
+- **Architecture note:** Tilda is a drop-down terminal frontend built on the **VTE** (`libvte`) widget; scrollback ring-buffer state and viewport adjustment live in VTE (`src/vte.cc` / `src/vteseq.cc`), while Tilda exposes configuration options such as `scroll_on_output`.
+- **Key state & helpers:**
+  - `m_screen->insert_delta` — tracks the buffer row position where new lines are inserted/scrolled into history.
+  - `m_screen->scroll_delta` — tracks the current viewport row position in the buffer (`scroll_delta == insert_delta` when at the bottom; `scroll_delta < insert_delta` when scrolled back).
+  - `queue_adjustment_value_changed(...)` — synchronizes the GTK/scrollbar adjustment with `m_screen->scroll_delta`.
+- **Pinning mechanism:** When `scroll-on-output` is disabled (`false`) and the user is scrolled back (`scroll_delta < insert_delta`), incoming lines advance `insert_delta` while `scroll_delta` remains anchored at its buffer row (clamped only if the ring buffer's oldest retained row advances past `scroll_delta`). Consequently, visible text does not jump or drift away while reading history.
+
+### 3. Why This Matters When Patching `xterm`
+- Both Alacritty (`display_offset += positions` when `display_offset != 0`) and VTE (keeping `scroll_delta` anchored while `insert_delta` advances) preserve the *relative distance* from the live bottom when new lines enter scrollback.
+- In `xterm`, `screen->topline` is a negative offset relative to the live bottom (`0` at bottom, `-N` scrolled back) that is **not** decremented when `amount` lines are pushed into `screen->savedlines` while `screen->topline < 0 && !screen->scrollttyoutput`. Subtracting `amount` from `screen->topline` (clamped to `-screen->savedlines`) and updating the scrollbar thumb replicates Alacritty/VTE's steady-viewport behavior.
