@@ -32,7 +32,7 @@ A. When Lines Scroll Into Scrollback History (Full-Screen Scroll Up):
        `if (new_top < -screen->savedlines) new_top = -screen->savedlines;`
        `screen->topline = new_top;`
      - Suppress or adjust the physical XCopyArea / screen-shift blit on the visible window when `screen->topline < 0 && !screen->scrollttyoutput` so the visible rows are NOT shifted upward on screen, and only redraw if `new_top` hit the `-screen->savedlines` clamp (ring buffer wrap/eviction).
-     - Call `ScrollBarDrawThumb(screen->scrollWidget)` so the scrollbar thumb shrinks/moves upward proportionally as `screen->savedlines` grows, matching the stationary text.
+     - Call `ScrollBarDrawThumb(xw, 1)` after saved-lines accounting so the scrollbar thumb stays synchronized with `screen->savedlines`.
 
 B. Edge Cases to Verify in Codebase:
    1. Jump Scroll (`jumpScroll: true`): xterm batches multiple newlines into a multi-line scroll (`amount > 1`). Ensure `amount` (not hardcoded `1`) is subtracted from `screen->topline` and accounted for in `savedlines` clamping.
