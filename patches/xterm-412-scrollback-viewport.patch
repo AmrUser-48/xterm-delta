@@ -5,6 +5,8 @@
  
  #define NoPixel 0xfffffffff
  
++static void adjustHiliteOnFwdScroll(XtermWidget xw, int amount, Bool all_lines);
++
 +/*
 + * Keep a scrolled-back viewport anchored while full-screen output is
 + * transferred into the saved-lines buffer. Return rows evicted above it.
