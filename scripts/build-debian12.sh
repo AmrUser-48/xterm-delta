@@ -60,6 +60,7 @@ build_variant() {
     fi
 
     cd "$source_dir"
+    export QUILT_PATCHES=debian/patches
     quilt new 99-xterm-delta-scrollback-viewport.patch
     quilt add util.c
     patch --batch --forward -p1 < "$REPO_DIR/patches/xterm-$variant-scrollback-viewport.patch"
