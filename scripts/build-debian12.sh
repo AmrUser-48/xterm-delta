@@ -18,8 +18,6 @@ case "${1:-all}" in
         ;;
 esac
 
-# Binary build dependencies come from the host's configured Debian 12
-# repositories. Source indexes provide the two exact Debian source versions.
 cat >/etc/apt/sources.list.d/xterm-delta-src.sources <<'EOF'
 Types: deb-src
 URIs: http://deb.debian.org/debian
@@ -44,8 +42,7 @@ build_variant() {
     mkdir -p "$source_root" "$output_dir"
     cd "$source_root"
 
-    # Use Bookworm's xterm build-dependencies for both variants. The 412
-    # source version additionally needs these headers; Xinerama is disabled.
+    # Keep binary build dependencies on Bookworm for both source versions.
     apt-get build-dep -y --no-install-recommends xterm=379-1
     if [[ "$variant" == "412" ]]; then
         apt-get install -y --no-install-recommends libxkbfile-dev libxcursor-dev
@@ -60,25 +57,32 @@ build_variant() {
 
     cd "$source_dir"
 
-    # Keep Debian's packaging configuration, but build without Xinerama or
-    # the optional pulldown toolbar. xterm has no native tabbed-window UI.
-    if ! grep -q -- '--without-xinerama' debian/rules; then
-        grep -q -- '--without-xterm-symlink' debian/rules
-        sed -i '/--without-xterm-symlink \\/a\    --without-xinerama \\' debian/rules
-    fi
-    if grep -q -- '--enable-toolbar' debian/rules; then
-        sed -i 's/--enable-toolbar/--disable-toolbar/' debian/rules
-    elif ! grep -q -- '--disable-toolbar' debian/rules; then
-        printf 'Could not find xterm toolbar configure option in %s/debian/rules\n' "$source_dir" >&2
-        return 1
-    fi
+    # Disable Xinerama and xterm's optional pulldown toolbar in Debian rules.
+    # xterm does not implement a native tabbed-window interface.
+    python3 - <<'PY'
+from pathlib import Path
 
-    grep -q -- '--without-xinerama' debian/rules
-    grep -q -- '--disable-toolbar' debian/rules
-    if grep -q -- '--enable-toolbar' debian/rules; then
-        printf 'Toolbar is still enabled in %s/debian/rules\n' "$source_dir" >&2
-        return 1
-    fi
+rules_path = Path("debian/rules")
+rules = rules_path.read_text()
+
+if "--without-xinerama" not in rules:
+    anchor = "    --without-xterm-symlink \\\n"
+    if anchor not in rules:
+        raise SystemExit("Cannot locate configure_flags insertion point in debian/rules")
+    rules = rules.replace(anchor, anchor + "    --without-xinerama \\\n", 1)
+
+if "--enable-toolbar" in rules:
+    rules = rules.replace("--enable-toolbar", "--disable-toolbar", 1)
+elif "--disable-toolbar" not in rules:
+    raise SystemExit("Cannot locate toolbar configure option in debian/rules")
+
+if "--without-xinerama" not in rules or "--disable-toolbar" not in rules:
+    raise SystemExit("Required lean configure options were not applied")
+if "--enable-toolbar" in rules:
+    raise SystemExit("Toolbar remains enabled")
+
+rules_path.write_text(rules)
+PY
 
     dch --local +core2 --distribution bookworm --force-distribution \
         "Build for Core 2 with scroll-lock enabled; disable Xinerama and toolbar."
